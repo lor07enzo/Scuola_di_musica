@@ -54,7 +54,9 @@ public class CourseService {
                 .livello(request.livello() != null ? request.livello() : Livello.PRINCIPIANTE)
                 .build();
 
-        return mapToCourseResponse(courseRepository.save(course));
+        Course savedCourse = Objects.requireNonNull(courseRepository.save(Objects.requireNonNull(course)));
+
+        return mapToCourseResponse(courseRepository.save(savedCourse));
     }
 
     @Transactional(readOnly = true)
@@ -105,7 +107,6 @@ public class CourseService {
         Course course = courseRepository.findByCodiceCorso(codiceCorso)
                 .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato: " + codiceCorso));
 
-        // Controllo unicità numero lezione all'interno dello stesso corso
         if (lessonRepository.existsByCourseIdAndNumero(course.getId(), request.numero())) {
             throw new DuplicateResourceException("La lezione n. " + request.numero() + " è già presente in questo corso.");
         }
@@ -120,7 +121,9 @@ public class CourseService {
                 .course(course)
                 .build();
 
-        return mapToLessonResponse(lessonRepository.save(lesson));
+        Lesson savedLesson = Objects.requireNonNull(lessonRepository.save(Objects.requireNonNull(lesson)));
+
+        return mapToLessonResponse(lessonRepository.save(savedLesson));
     }
 
     public void addInstrumentToCourse(String codiceCorso, String codiceStrumento) {

@@ -1,18 +1,29 @@
 package com.scuoladimusica.service;
 
+import com.scuoladimusica.exception.BusinessRuleException;
+import com.scuoladimusica.exception.DuplicateResourceException;
+import com.scuoladimusica.exception.ResourceNotFoundException;
 import com.scuoladimusica.model.dto.request.InstrumentRequest;
 import com.scuoladimusica.model.dto.response.InstrumentResponse;
-import com.scuoladimusica.model.dto.response.LoanResponse;
+import com.scuoladimusica.model.entity.Instrument;
+import com.scuoladimusica.model.entity.Loan;
+import com.scuoladimusica.model.entity.Student;
 import com.scuoladimusica.repository.InstrumentRepository;
 import com.scuoladimusica.repository.LoanRepository;
 import com.scuoladimusica.repository.StudentRepository;
+
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @Transactional
 public class InstrumentService {
@@ -26,78 +37,106 @@ public class InstrumentService {
     @Autowired
     private StudentRepository studentRepository;
 
-    /**
-     * TODO: Creare un nuovo strumento.
-     *
-     * Requisiti:
-     * - Verificare unicità codice strumento (DuplicateResourceException)
-     * - Salvare e restituire la response
-     */
     public InstrumentResponse createInstrument(InstrumentRequest request) {
-        throw new UnsupportedOperationException("TODO: Implementare createInstrument");
+        log.info("Creazione nuovo strumento: {}", request.codiceStrumento());
+
+        if (instrumentRepository.existsByCodiceStrumento(request.codiceStrumento())) {
+            throw new DuplicateResourceException("Codice strumento esistente: " + request.codiceStrumento());
+        }
+
+        Instrument instrument = mapToEntity(request);
+        Instrument savedInstrument = Objects.requireNonNull(instrumentRepository.save(Objects.requireNonNull(instrument)));
+        return mapToResponse(instrumentRepository.save(savedInstrument));
     }
 
-    /**
-     * TODO: Recuperare uno strumento per codice.
-     *
-     * Requisiti:
-     * - ResourceNotFoundException se non trovato
-     * - Includere nella response se è disponibile o meno
-     */
-    @Transactional(readOnly = true)
-    public InstrumentResponse getInstrumentByCode(String codiceStrumento) {
-        throw new UnsupportedOperationException("TODO: Implementare getInstrumentByCode");
-    }
-
-    /**
-     * TODO: Recuperare tutti gli strumenti.
-     */
     @Transactional(readOnly = true)
     public List<InstrumentResponse> getAllInstruments() {
-        throw new UnsupportedOperationException("TODO: Implementare getAllInstruments");
+        return instrumentRepository.findAll().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
     }
 
-    /**
-     * TODO: Recuperare solo gli strumenti disponibili (senza prestiti attivi).
-     *
-     * Requisiti:
-     * - Usare il metodo findAvailable() del repository
-     */
     @Transactional(readOnly = true)
-    public List<InstrumentResponse> getAvailableInstruments() {
-        throw new UnsupportedOperationException("TODO: Implementare getAvailableInstruments");
+    public InstrumentResponse getInstrumentByCodice(String codice) {
+        return instrumentRepository.findByCodiceStrumento(codice)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("Strumento non trovato: " + codice));
     }
 
-    /**
-     * TODO: Prestare uno strumento a uno studente.
-     *
-     * Requisiti:
-     * - Trovare lo strumento per codice (ResourceNotFoundException se non trovato)
-     * - Trovare lo studente per matricola (ResourceNotFoundException se non trovato)
-     * - Verificare che lo strumento sia disponibile (BusinessRuleException se già in prestito)
-     * - Creare un nuovo Loan con dataInizio e dataFine = null (prestito attivo)
-     * - Salvare e restituire la LoanResponse
-     *
-     * Eccezioni da usare: ResourceNotFoundException, BusinessRuleException
-     */
-    public LoanResponse loanToStudent(String codiceStrumento, String matricolaStudente, LocalDate dataInizio) {
-        throw new UnsupportedOperationException("TODO: Implementare loanToStudent");
+    public void deleteInstrument(String codice) {
+        Instrument instrument = instrumentRepository.findByCodiceStrumento(codice)
+                .orElseThrow(() -> new ResourceNotFoundException("Strumento non trovato"));
+        
+        if (!instrument.isDisponibile()) {
+            throw new BusinessRuleException("Impossibile eliminare uno strumento attualmente in prestito");
+        }
+        
+        instrumentRepository.delete(instrument);
     }
 
-    /**
-     * TODO: Restituire uno strumento (chiudere il prestito attivo).
-     *
-     * Requisiti:
-     * - Trovare lo strumento per codice (ResourceNotFoundException se non trovato)
-     * - Trovare il prestito attivo (dataFine IS NULL) per questo strumento
-     *   (BusinessRuleException se non c'è un prestito attivo)
-     * - Verificare che dataFine >= dataInizio del prestito (BusinessRuleException)
-     * - Impostare la dataFine sul prestito e salvare
-     * - Restituire la LoanResponse
-     *
-     * Eccezioni da usare: ResourceNotFoundException, BusinessRuleException
-     */
-    public LoanResponse returnInstrument(String codiceStrumento, LocalDate dataFine) {
-        throw new UnsupportedOperationException("TODO: Implementare returnInstrument");
+    // --- LOGICA DI PRESTITO (LOAN) ---
+
+    public void lendInstrument(String codiceStrumento, String matricolaStudente) {
+        log.info("Tentativo di prestito strumento {} a studente {}", codiceStrumento, matricolaStudente);
+
+        Instrument instrument = instrumentRepository.findByCodiceStrumento(codiceStrumento)
+                .orElseThrow(() -> new ResourceNotFoundException("Strumento non trovato"));
+
+        Student student = studentRepository.findByMatricola(matricolaStudente)
+                .orElseThrow(() -> new ResourceNotFoundException("Studente non trovato"));
+
+        if (!instrument.isDisponibile()) {
+            throw new BusinessRuleException("Lo strumento è già in prestito");
+        }
+
+        Loan newLoan = new Loan();
+        newLoan.setInstrument(instrument);
+        newLoan.setStudent(student);
+        newLoan.setDataInizio(LocalDate.now());
+        newLoan.setDataFine(null); 
+
+        loanRepository.save(newLoan);
+    }
+
+    public void returnInstrument(String codiceStrumento) {
+        log.info("Restituzione strumento: {}", codiceStrumento);
+
+        Instrument instrument = instrumentRepository.findByCodiceStrumento(codiceStrumento)
+                .orElseThrow(() -> new ResourceNotFoundException("Strumento non trovato"));
+
+        Loan activeLoan = loanRepository.findByInstrumentIdAndDataFineIsNull(instrument.getId())
+                .orElseThrow(() -> new BusinessRuleException("Non risultano prestiti attivi per questo strumento"));
+
+        activeLoan.setDataFine(LocalDate.now());
+        loanRepository.save(activeLoan);
+    }
+
+    // --- MAPPING ---
+
+    private Instrument mapToEntity(InstrumentRequest request) {
+        return Instrument.builder()
+                .codiceStrumento(request.codiceStrumento())
+                .nome(request.nome())
+                .tipoStrumento(request.tipoStrumento())
+                .marca(request.marca())
+                .annoProduzione(request.annoProduzione())
+                .numeroCorde(request.numeroCorde())
+                .tipoCorde(request.tipoCorde())
+                .materiale(request.materiale())
+                .tipoPelle(request.tipoPelle())
+                .diametro(request.diametro())
+                .build();
+    }
+
+    private InstrumentResponse mapToResponse(Instrument instrument) {
+        return new InstrumentResponse(
+                instrument.getId(),
+                instrument.getCodiceStrumento(),
+                instrument.getNome(),
+                instrument.getTipoStrumento(),
+                instrument.getMarca(),
+                instrument.getAnnoProduzione(),
+                instrument.isDisponibile() 
+        );
     }
 }
