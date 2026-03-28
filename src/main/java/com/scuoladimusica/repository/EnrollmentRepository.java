@@ -12,12 +12,9 @@ import com.scuoladimusica.model.entity.Enrollment;
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     
-    List<Enrollment> findByStudentId(Long studentId);
-
-    List<Enrollment> findByCourseId(Long courseId);
-
-    boolean existsByStudentIdAndCourseId(Long studentId, Long courseId);
-
+    boolean existsByStudentMatricolaAndCourseCodiceCorso(String matricola, String codiceCorso);
     Optional<Enrollment> findByStudentMatricolaAndCourseCodiceCorso(String matricola, String codiceCorso);
-
+    List<Enrollment> findAllByStudentMatricola(String matricola);
+    List<Enrollment> findAllByCourseCodiceCorso(String codiceCorso);
+    int countByCourseCodiceCorso(String codice);
 }

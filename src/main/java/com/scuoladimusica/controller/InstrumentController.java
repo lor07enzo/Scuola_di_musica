@@ -22,86 +22,50 @@ public class InstrumentController {
     @Autowired
     private InstrumentService instrumentService;
 
-    /**
-     * TODO: POST /api/instruments - Creare un nuovo strumento.
-     *
-     * Requisiti:
-     * - Solo ADMIN può creare strumenti
-     * - Validare la request con @Valid
-     * - Restituire 201 CREATED con la InstrumentResponse
-     */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<InstrumentResponse> createInstrument(
-            @Valid @RequestBody InstrumentRequest request) {
-        throw new UnsupportedOperationException("TODO: Implementare createInstrument nel controller");
+    public ResponseEntity<InstrumentResponse> createInstrument(@Valid @RequestBody InstrumentRequest request) {
+        return new ResponseEntity<>(instrumentService.createInstrument(request), HttpStatus.CREATED);
     }
 
-    /**
-     * TODO: GET /api/instruments - Recuperare tutti gli strumenti.
-     *
-     * Requisiti:
-     * - Tutti gli utenti autenticati
-     * - Restituire 200 OK con la lista
-     */
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
     public ResponseEntity<List<InstrumentResponse>> getAllInstruments() {
-        throw new UnsupportedOperationException("TODO: Implementare getAllInstruments nel controller");
+        return ResponseEntity.ok(instrumentService.getAllInstruments());
     }
 
-    /**
-     * TODO: GET /api/instruments/available - Recuperare strumenti disponibili.
-     *
-     * Requisiti:
-     * - Tutti gli utenti autenticati
-     * - Restituire 200 OK con la lista filtrata
-     */
     @GetMapping("/available")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
     public ResponseEntity<List<InstrumentResponse>> getAvailableInstruments() {
-        throw new UnsupportedOperationException("TODO: Implementare getAvailableInstruments nel controller");
+        return ResponseEntity.ok(instrumentService.getAvailableInstruments());
     }
 
-    /**
-     * TODO: GET /api/instruments/{codiceStrumento} - Recuperare uno strumento.
-     *
-     * Requisiti:
-     * - Tutti gli utenti autenticati
-     * - Restituire 200 OK con la InstrumentResponse
-     */
-    @GetMapping("/{codiceStrumento}")
-    public ResponseEntity<InstrumentResponse> getInstrument(@PathVariable String codiceStrumento) {
-        throw new UnsupportedOperationException("TODO: Implementare getInstrument nel controller");
+    @GetMapping("/{code}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('TEACHER')")
+    public ResponseEntity<InstrumentResponse> getInstrumentByCode(@PathVariable String code) {
+        return ResponseEntity.ok(instrumentService.getInstrumentByCode(code));
     }
 
-    /**
-     * TODO: POST /api/instruments/{codiceStrumento}/loan - Prestare strumento.
-     *
-     * Requisiti:
-     * - Solo ADMIN e TEACHER possono prestare strumenti
-     * - Validare la request con @Valid
-     * - Restituire 201 CREATED con la LoanResponse
-     */
-    @PostMapping("/{codiceStrumento}/loan")
+    @PostMapping("/{code}/loan")
     @PreAuthorize("hasRole('ADMIN') or hasRole('TEACHER')")
     public ResponseEntity<LoanResponse> loanInstrument(
-            @PathVariable String codiceStrumento,
+            @PathVariable String code,
             @Valid @RequestBody LoanRequest request) {
-        throw new UnsupportedOperationException("TODO: Implementare loanInstrument nel controller");
+        
+        LoanResponse response = instrumentService.loanToStudent(
+                code, 
+                request.matricolaStudente(), 
+                request.dataInizio()
+        );
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    /**
-     * TODO: POST /api/instruments/{codiceStrumento}/return - Restituire strumento.
-     *
-     * Requisiti:
-     * - Solo ADMIN e TEACHER possono gestire restituzioni
-     * - Validare la request con @Valid
-     * - Restituire 200 OK con la LoanResponse
-     */
-    @PostMapping("/{codiceStrumento}/return")
+    @PostMapping("/{code}/return")
     @PreAuthorize("hasRole('ADMIN') or hasRole('TEACHER')")
     public ResponseEntity<LoanResponse> returnInstrument(
-            @PathVariable String codiceStrumento,
+            @PathVariable String code,
             @Valid @RequestBody ReturnRequest request) {
-        throw new UnsupportedOperationException("TODO: Implementare returnInstrument nel controller");
+        
+        return ResponseEntity.ok(instrumentService.returnInstrument(code, request.dataFine()));
     }
 }

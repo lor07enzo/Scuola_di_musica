@@ -12,12 +12,13 @@ import com.scuoladimusica.model.entity.Student;
 
 @Repository
 public interface StudentRepository extends JpaRepository<Student, Long> {
+
     Optional<Student> findByMatricola(String matricola);
 
     boolean existsByMatricola(String matricola);
 
     boolean existsByCf(String cf);
 
-    List<Student> findByLivello(Livello livello);
+    List<Student> findAllByLivello(Livello livello);
 
 }

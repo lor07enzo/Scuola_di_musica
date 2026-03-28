@@ -1,10 +1,9 @@
 package com.scuoladimusica.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.scuoladimusica.TestDataFactory;
-import com.scuoladimusica.model.dto.request.TeacherRequest;
-import com.scuoladimusica.model.entity.*;
+import java.time.LocalDate;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,13 +14,20 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-
-import static org.hamcrest.Matchers.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.scuoladimusica.TestDataFactory;
+import com.scuoladimusica.model.dto.request.TeacherRequest;
+import com.scuoladimusica.model.entity.Livello;
+import com.scuoladimusica.model.entity.Teacher;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -129,7 +135,7 @@ class TeacherControllerTest {
             dati.creaInsegnantePredefinito();
 
             TeacherRequest request = new TeacherRequest(
-                    "I001", "ALTROCF12345678AB", "Altro", "Nome",
+                    "I001", "ALTROCF12345678A", "Altro", "Nome",
                     LocalDate.of(1985, 5, 5), null, 2000.0, "Violino", 5);
 
             mockMvc.perform(post("/api/teachers")

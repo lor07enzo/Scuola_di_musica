@@ -14,13 +14,10 @@ import com.scuoladimusica.model.entity.Livello;
 public interface CourseRepository extends JpaRepository<Course, Long> {
     
     Optional<Course> findByCodiceCorso(String codiceCorso);
-
     boolean existsByCodiceCorso(String codiceCorso);
-
     List<Course> findByOnlineTrue();
-
     List<Course> findByLivello(Livello livello);
-
     List<Course> findByTeacherId(Long teacherId);
-
+    int countByTeacherMatricolaInsegnante(String matricolaInsegnante);
+    List<Course> findAllByTeacherMatricolaInsegnante(String matricolaInsegnante);
 }

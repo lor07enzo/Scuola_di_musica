@@ -1,9 +1,7 @@
 package com.scuoladimusica.service;
 
 import java.util.List;
-import java.util.Objects;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,108 +10,138 @@ import com.scuoladimusica.exception.ResourceNotFoundException;
 import com.scuoladimusica.model.dto.request.StudentRequest;
 import com.scuoladimusica.model.dto.response.StudentReportResponse;
 import com.scuoladimusica.model.dto.response.StudentResponse;
+import com.scuoladimusica.model.entity.Enrollment;
 import com.scuoladimusica.model.entity.Livello;
 import com.scuoladimusica.model.entity.Student;
+import com.scuoladimusica.repository.EnrollmentRepository;
 import com.scuoladimusica.repository.StudentRepository;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
-@Transactional
+@RequiredArgsConstructor
 public class StudentService {
 
-    @Autowired
-    private StudentRepository studentRepository;
+    private final StudentRepository studentRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
+    @Transactional
     public StudentResponse createStudent(StudentRequest request) {
+        
         if (studentRepository.existsByMatricola(request.matricola())) {
-            throw new DuplicateResourceException("Matricola già presente: " + request.matricola());
+            throw new DuplicateResourceException("Matricola già esistente");
         }
         if (studentRepository.existsByCf(request.cf())) {
-            throw new DuplicateResourceException("Codice Fiscale già presente: " + request.cf());
+            throw new DuplicateResourceException("Codice Fiscale già esistente");
         }
+
+        Livello livello = (request.livello() != null) ? request.livello() : Livello.PRINCIPIANTE;
 
         Student student = Student.builder()
                 .matricola(request.matricola())
                 .cf(request.cf())
                 .nome(request.nome())
                 .cognome(request.cognome())
-                .telefono(request.telefono())
                 .dataNascita(request.dataNascita())
-                .livello(request.livello() != null ? request.livello() : Livello.PRINCIPIANTE)
+                .telefono(request.telefono())
+                .livello(livello)
                 .build();
-        
-        Student savedStudent = Objects.requireNonNull(studentRepository.save(Objects.requireNonNull(student)));
 
-        return mapToStudentResponse(studentRepository.save(savedStudent));
+        return mapToResponse(studentRepository.save(student));
     }
 
-    @Transactional(readOnly = true)
-    public StudentResponse getStudentByMatricola(String matricola) {
-        Student student = studentRepository.findByMatricola(matricola)
-                .orElseThrow(() -> new ResourceNotFoundException("Studente non trovato: " + matricola));
-        return mapToStudentResponse(student);
-    }
-
-    @Transactional(readOnly = true)
-    public List<StudentResponse> getAllStudents() {
-        return studentRepository.findAll().stream()
-                .map(this::mapToStudentResponse)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<StudentResponse> getStudentsByLivello(Livello livello) {
-        return studentRepository.findByLivello(livello).stream()
-                .map(this::mapToStudentResponse)
-                .toList();
-    }
-
+    @Transactional
     public StudentResponse updateStudent(String matricola, StudentRequest request) {
         Student student = studentRepository.findByMatricola(matricola)
-                .orElseThrow(() -> new ResourceNotFoundException("Studente non trovato: " + matricola));
+                .orElseThrow(() -> new ResourceNotFoundException("Studente non trovato"));
 
         student.setNome(request.nome());
         student.setCognome(request.cognome());
+        student.setDataNascita(request.dataNascita());
         student.setTelefono(request.telefono());
-        student.setLivello(request.livello());
+        
+        if (request.livello() != null) {
+            student.setLivello(request.livello());
+        }
 
-        return mapToStudentResponse(studentRepository.save(student));
+        return mapToResponse(studentRepository.save(student));
     }
 
+    @Transactional
     public void deleteStudent(String matricola) {
         Student student = studentRepository.findByMatricola(matricola)
-                .orElseThrow(() -> new ResourceNotFoundException("Studente non trovato: " + matricola));
-        studentRepository.delete(Objects.requireNonNull(student));
+                .orElseThrow(() -> new ResourceNotFoundException("Studente non trovato"));
+        
+        studentRepository.delete(student);
     }
 
-    @Transactional(readOnly = true)
+    public StudentResponse getStudentByMatricola(String matricola) {
+        return studentRepository.findByMatricola(matricola)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("Studente non trovato"));
+    }
+
+    public List<StudentResponse> getAllStudents() {
+        return studentRepository.findAll().stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public List<StudentResponse> getStudentsByLivello(Livello livello) {
+        return studentRepository.findAllByLivello(livello).stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+
     public StudentReportResponse getStudentReport(String matricola) {
         Student student = studentRepository.findByMatricola(matricola)
-                .orElseThrow(() -> new ResourceNotFoundException("Studente non trovato: " + matricola));
+                .orElseThrow(() -> new ResourceNotFoundException("Studente non trovato"));
+
+        List<Enrollment> enrollments = enrollmentRepository.findAllByStudentMatricola(matricola);
+
+        double media = enrollments.stream()
+                .filter(e -> e.getVotoFinale() != null)
+                .mapToInt(Enrollment::getVotoFinale)
+                .average()
+                .orElse(0.0);
+
+        List<String> nomiCorsi = enrollments.stream()
+                .map(e -> e.getCourse().getNome())
+                .toList();
 
         return new StudentReportResponse(
-                student.getNomeCompleto(),
+                student.getNome() + " " + student.getCognome(),
                 student.getLivello(),
-                student.getNumeroCorsiFrequentati(),
-                student.getMediaVoti(),
-                student.getEnrollments().stream().map(e -> e.getCourse().getNome()).toList()
+                enrollments.size(),
+                media,
+                nomiCorsi
         );
     }
 
-    // --- Helper Methods per il Mapping ---
 
-    private StudentResponse mapToStudentResponse(Student student) {
+    private StudentResponse mapToResponse(Student s) {
+        // Recuperiamo le iscrizioni per calcolare statistiche rapide se richiesto dal DTO
+        List<Enrollment> enrollments = enrollmentRepository.findAllByStudentMatricola(s.getMatricola());
+        
+        double media = enrollments.stream()
+                .filter(e -> e.getVotoFinale() != null)
+                .mapToInt(Enrollment::getVotoFinale)
+                .average()
+                .orElse(0.0);
+
         return new StudentResponse(
-                student.getId(),
-                student.getMatricola(),
-                student.getCf(),
-                student.getNome(),
-                student.getCognome(),
-                student.getNomeCompleto(),  
-                student.getDataNascita(),
-                student.getTelefono(),
-                student.getLivello(),
-                student.getNumeroCorsiFrequentati(), 
-                student.getMediaVoti() 
+                s.getId(),
+                s.getMatricola(),
+                s.getCf(),
+                s.getNome(),
+                s.getCognome(),
+                s.getNome() + " " + s.getCognome(),
+                s.getDataNascita(),
+                s.getTelefono(),
+                s.getLivello(),
+                enrollments.size(), 
+                media               
         );
     }
 }

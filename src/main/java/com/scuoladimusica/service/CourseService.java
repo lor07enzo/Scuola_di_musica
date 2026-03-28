@@ -1,9 +1,9 @@
 package com.scuoladimusica.service;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,29 +19,34 @@ import com.scuoladimusica.model.entity.Instrument;
 import com.scuoladimusica.model.entity.Lesson;
 import com.scuoladimusica.model.entity.Livello;
 import com.scuoladimusica.repository.CourseRepository;
+import com.scuoladimusica.repository.EnrollmentRepository;
 import com.scuoladimusica.repository.InstrumentRepository;
 import com.scuoladimusica.repository.LessonRepository;
+import com.scuoladimusica.repository.TeacherRepository;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class CourseService {
 
-    @Autowired
-    private CourseRepository courseRepository;
-
-    @Autowired
-    private LessonRepository lessonRepository;
-
-    @Autowired
-    private InstrumentRepository instrumentRepository;
+    private final CourseRepository courseRepository;
+    private final TeacherRepository teacherRepository;
+    private final LessonRepository lessonRepository;
+    private final InstrumentRepository instrumentRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
 
+    @Transactional
     public CourseResponse createCourse(CourseRequest request) {
+        validateDates(request.dataInizio(), request.dataFine());
+
         if (courseRepository.existsByCodiceCorso(request.codiceCorso())) {
-            throw new DuplicateResourceException("Codice corso già esistente: " + request.codiceCorso());
+            throw new DuplicateResourceException("Codice corso già esistente");
         }
 
-        validateDates(request);
+        Livello livello = (request.livello() != null) ? request.livello() : Livello.PRINCIPIANTE;
 
         Course course = Course.builder()
                 .codiceCorso(request.codiceCorso())
@@ -51,40 +56,18 @@ public class CourseService {
                 .costoOrario(request.costoOrario())
                 .totaleOre(request.totaleOre())
                 .online(request.online())
-                .livello(request.livello() != null ? request.livello() : Livello.PRINCIPIANTE)
+                .livello(livello)
                 .build();
 
-        Course savedCourse = Objects.requireNonNull(courseRepository.save(Objects.requireNonNull(course)));
-
-        return mapToCourseResponse(courseRepository.save(savedCourse));
+        return mapToResponse(courseRepository.save(course));
     }
 
-    @Transactional(readOnly = true)
-    public CourseResponse getCourseByCode(String codiceCorso) {
-        Course course = courseRepository.findByCodiceCorso(codiceCorso)
-                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato: " + codiceCorso));
-        return mapToCourseResponse(course);
-    }
+    @Transactional
+    public CourseResponse updateCourse(String codice, CourseRequest request) {
+        Course course = courseRepository.findByCodiceCorso(codice)
+                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato"));
 
-    @Transactional(readOnly = true)
-    public List<CourseResponse> getAllCourses() {
-        return courseRepository.findAll().stream()
-                .map(this::mapToCourseResponse)
-                .toList(); 
-    }
-
-    @Transactional(readOnly = true)
-    public List<CourseResponse> getOnlineCourses() {
-        return courseRepository.findByOnlineTrue().stream()
-                .map(this::mapToCourseResponse)
-                .toList();
-    }
-
-   public CourseResponse updateCourse(String codiceCorso, CourseRequest request) {
-        Course course = courseRepository.findByCodiceCorso(codiceCorso)
-                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato: " + codiceCorso));
-
-        validateDates(request);
+        validateDates(request.dataInizio(), request.dataFine());
 
         course.setNome(request.nome());
         course.setDataInizio(request.dataInizio());
@@ -94,96 +77,132 @@ public class CourseService {
         course.setOnline(request.online());
         course.setLivello(request.livello());
 
-        return mapToCourseResponse(courseRepository.save(course));
+        return mapToResponse(courseRepository.save(course));
     }
 
-    public void deleteCourse(String codiceCorso) {
-        Course course = courseRepository.findByCodiceCorso(codiceCorso)
-                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato: " + codiceCorso));
-        courseRepository.delete(Objects.requireNonNull(course));
+    @Transactional
+    public void deleteCourse(String codice) {
+        Course course = courseRepository.findByCodiceCorso(codice)
+                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato"));
+        courseRepository.delete(course);
     }
 
+    @Transactional
     public LessonResponse addLesson(String codiceCorso, LessonRequest request) {
         Course course = courseRepository.findByCodiceCorso(codiceCorso)
-                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato: " + codiceCorso));
+                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato"));
 
-        if (lessonRepository.existsByCourseIdAndNumero(course.getId(), request.numero())) {
-            throw new DuplicateResourceException("La lezione n. " + request.numero() + " è già presente in questo corso.");
+        if (lessonRepository.existsByCourseCodiceCorsoAndNumero(codiceCorso, request.numero())) {
+            throw new DuplicateResourceException("Lezione numero " + request.numero() + " già presente in questo corso");
         }
 
         Lesson lesson = Lesson.builder()
+                .course(course)
                 .numero(request.numero())
                 .data(request.data())
                 .oraInizio(request.oraInizio())
                 .durata(request.durata())
                 .aula(request.aula())
                 .argomento(request.argomento())
-                .course(course)
                 .build();
 
-        Lesson savedLesson = Objects.requireNonNull(lessonRepository.save(Objects.requireNonNull(lesson)));
+        Lesson salvata = lessonRepository.save(lesson);
+        if (course.getLessons() == null) {
+            course.setLessons(new ArrayList<>());
+        }
+        course.getLessons().add(salvata); 
 
-        return mapToLessonResponse(lessonRepository.save(savedLesson));
+        return mapToLessonResponse(salvata);
     }
 
+    @Transactional
     public void addInstrumentToCourse(String codiceCorso, String codiceStrumento) {
         Course course = courseRepository.findByCodiceCorso(codiceCorso)
-                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato: " + codiceCorso));
+                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato"));
 
         Instrument instrument = instrumentRepository.findByCodiceStrumento(codiceStrumento)
-                .orElseThrow(() -> new ResourceNotFoundException("Strumento non trovato: " + codiceStrumento));
+                .orElseThrow(() -> new ResourceNotFoundException("Strumento non trovato"));
 
         if (course.getInstruments().contains(instrument)) {
-            throw new DuplicateResourceException("Strumento già associato");
+            throw new DuplicateResourceException("Strumento già associato al corso");
         }
 
         course.getInstruments().add(instrument);
         courseRepository.save(course);
     }
 
+    public CourseResponse getCourseByCode(String codice) {
+        return courseRepository.findByCodiceCorso(codice)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("Corso non trovato"));
+    }
 
-    private void validateDates(CourseRequest request) {
-        if (request.dataFine().isBefore(request.dataInizio())) {
+    public List<CourseResponse> getAllCourses() {
+        return courseRepository.findAll().stream().map(this::mapToResponse).toList();
+    }
+
+    public List<CourseResponse> getOnlineCourses() {
+        return courseRepository.findByOnlineTrue().stream().map(this::mapToResponse).toList();
+    }
+
+    // HELPER E MAPPER
+    private void validateDates(LocalDate inizio, LocalDate fine) {
+        if (fine.isBefore(inizio) || fine.isEqual(inizio)) {
             throw new BusinessRuleException("La data di fine deve essere successiva alla data di inizio");
         }
     }
 
-    private CourseResponse mapToCourseResponse(Course course) {
-        String teacherName = (course.getTeacher() != null) 
-            ? course.getTeacher().getNome() + " " + course.getTeacher().getCognome() 
-            : "Docente non assegnato";
-
-        List<LessonResponse> lezioniDto = course.getLessons().stream()
-                .map(this::mapToLessonResponse)
-                .toList();
-
-        return new CourseResponse(
-                course.getId(),
-                course.getCodiceCorso(),
-                course.getNome(),
-                course.getDataInizio(),
-                course.getDataFine(),
-                course.getCostoOrario(),
-                course.getTotaleOre(),
-                course.getCostoTotale(),
-                course.getDurataGiorni(),
-                course.isOnline(),
-                course.getLivello(),
-                teacherName,
-                course.getEnrollments().size(),
-                lezioniDto
+    private LessonResponse mapToLessonResponse(Lesson l) {
+        return new LessonResponse(
+                l.getId(),
+                l.getNumero(),
+                l.getData(),
+                l.getOraInizio(),
+                l.getDurata(),
+                l.getAula(),
+                l.getArgomento()
         );
     }
 
-    private LessonResponse mapToLessonResponse(Lesson lesson) {
-        return new LessonResponse(
-                lesson.getId(),
-                lesson.getNumero(),
-                lesson.getData(),
-                lesson.getOraInizio(),
-                lesson.getDurata(),
-                lesson.getAula(),
-                lesson.getArgomento()
+    private CourseResponse mapToResponse(Course c) {
+        String nomeInsegnante = (c.getTeacher() != null) 
+                ? c.getTeacher().getNome() + " " + c.getTeacher().getCognome() 
+                : null;
+
+        double costoTotale = (c.getCostoOrario() != null && c.getTotaleOre() != null)
+                ? c.getCostoOrario() * c.getTotaleOre() : 0.0;
+
+        long durataGiorni = java.time.temporal.ChronoUnit.DAYS.between(c.getDataInizio(), c.getDataFine());
+
+        int numeroIscritti = enrollmentRepository.countByCourseCodiceCorso(c.getCodiceCorso());
+
+        List<LessonResponse> lezioniDto = lessonRepository.findAllByCourseCodiceCorso(c.getCodiceCorso())
+                .stream()
+                .map(l -> new LessonResponse(
+                        l.getId(), 
+                        l.getNumero(), 
+                        l.getData(), 
+                        l.getOraInizio(), 
+                        l.getDurata(), 
+                        l.getAula(), 
+                        l.getArgomento()))
+                .toList();
+
+        return new CourseResponse(
+                c.getId(),
+                c.getCodiceCorso(),
+                c.getNome(),
+                c.getDataInizio(),
+                c.getDataFine(),
+                c.getCostoOrario(),
+                c.getTotaleOre(),
+                costoTotale,
+                durataGiorni,
+                c.isOnline(),
+                c.getLivello(),
+                nomeInsegnante,
+                numeroIscritti,
+                lezioniDto
         );
     }
 }

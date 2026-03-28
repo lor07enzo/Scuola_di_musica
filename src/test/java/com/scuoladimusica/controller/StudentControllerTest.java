@@ -1,11 +1,9 @@
 package com.scuoladimusica.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.scuoladimusica.TestDataFactory;
-import com.scuoladimusica.model.dto.request.StudentRequest;
-import com.scuoladimusica.model.entity.*;
-import com.scuoladimusica.repository.EnrollmentRepository;
+import java.time.LocalDate;
+
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasSize;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,13 +14,23 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-
-import static org.hamcrest.Matchers.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.scuoladimusica.TestDataFactory;
+import com.scuoladimusica.model.dto.request.StudentRequest;
+import com.scuoladimusica.model.entity.Course;
+import com.scuoladimusica.model.entity.Livello;
+import com.scuoladimusica.model.entity.Student;
+import com.scuoladimusica.model.entity.Teacher;
+import com.scuoladimusica.repository.EnrollmentRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -134,7 +142,7 @@ class StudentControllerTest {
             dati.creaStudentePredefinito();
 
             StudentRequest request = new StudentRequest(
-                    "M001", "ALTROCF12345678AB", "Altro", "Nome",
+                    "M001", "ALTROCF12345678A", "Altro", "Nome",
                     LocalDate.of(1985, 2, 2), null, null);
 
             mockMvc.perform(post("/api/students")

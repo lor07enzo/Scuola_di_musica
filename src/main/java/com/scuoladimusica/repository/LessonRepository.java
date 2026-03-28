@@ -11,8 +11,7 @@ import com.scuoladimusica.model.entity.Lesson;
 @Repository
 public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
-    List<Lesson> findByCourseId(Long courseId);
-
-    boolean existsByCourseIdAndNumero(Long courseId, int numero);
+    List<Lesson> findAllByCourseCodiceCorso(String codiceCorso);
+    boolean existsByCourseCodiceCorsoAndNumero(String codice, int numero);
     
 }
