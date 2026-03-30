@@ -3,8 +3,6 @@ pipeline {
 
     tools {
         maven 'M3'
-        // Se hai configurato anche un JDK nei Tools (es. 'Java17'), aggiungilo qui:
-        // jdk 'Java17' 
     }
 
     stages {
@@ -28,17 +26,28 @@ pipeline {
                 echo 'Esecuzione dei test unitari...'
                 sh 'mvn test'
             }
+            post {
+                always {
+                    // Genera il grafico dei test nell'interfaccia di Jenkins
+                    junit '**/target/surefire-reports/*.xml'
+                }
+            }
         }
 
         stage('Package') {
             steps {
                 echo 'Creazione del file JAR...'
                 sh 'mvn package -DskipTests'
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
     }
 
     post {
+        always {
+            // Pulisce la cartella di lavoro per non intasare Docker Desktop
+            cleanWs()
+        }
         success {
             echo 'Complimenti! La build della Scuola di Musica è terminata con successo.'
         }
