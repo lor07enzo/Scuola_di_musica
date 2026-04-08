@@ -39,7 +39,7 @@ pipeline {
             steps {
                 echo 'Creazione del file JAR...'
                 sh 'mvn package -DskipTests'
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
             }
         }
     }
