@@ -37,9 +37,24 @@ pipeline {
 
         stage('Package') {
             steps {
-                echo 'Creazione del file JAR...'
+                echo 'Creazione del file WAR...'
                 sh 'mvn package -DskipTests'
                 archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+            }
+        }
+
+        stage('Deploy su Tomcat') {
+            steps {
+                script {
+                    echo 'Pulizia container precedenti...'
+                    sh 'docker rm -f tomcat-scuola || true'
+                    
+                    echo 'Avvio Tomcat sulla porta 8081...'
+                    sh 'docker run -d -p 8081:8080 --name tomcat-scuola tomcat:latest'
+                    
+                    // Qui potresti aggiungere il comando per copiare il WAR dentro il container
+                    sh 'docker cp target/*.war tomcat-scuola:/usr/local/tomcat/webapps/'
+                }
             }
         }
     }
